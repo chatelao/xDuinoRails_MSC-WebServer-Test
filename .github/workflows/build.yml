@@ -3,7 +3,7 @@ name: Build Firmware
 on: [push, pull_request]
 
 jobs:
-  build:
+  build_platformio:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,3 +18,19 @@ jobs:
           pip install -U platformio
       - name: Build
         run: pio run
+        working-directory: firmware
+
+  build_arduino:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+      - name: Install dependencies
+        run: |
+          arduino-cli core update-index --additional-urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          arduino-cli core install Seeeduino:rp2040 --additional-urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          arduino-cli lib install "Adafruit TinyUSB Library"
+      - name: Compile
+        run: arduino-cli compile --fqbn Seeeduino:rp2040:seeed_xiao_rp2040 RNDIS_USB.ino
