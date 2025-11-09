@@ -29,8 +29,8 @@ jobs:
         uses: arduino/setup-arduino-cli@v1
       - name: Install dependencies
         run: |
-          arduino-cli core update-index --additional-urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
-          arduino-cli core install Seeeduino:rp2040 --additional-urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          arduino-cli core update-index --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+          arduino-cli core install rp2040:rp2040 --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
           arduino-cli lib install "Adafruit TinyUSB Library"
       - name: Compile
-        run: arduino-cli compile --fqbn Seeeduino:rp2040:seeed_xiao_rp2040 RNDIS_USB.ino
+        run: arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040 RNDIS_USB.ino
