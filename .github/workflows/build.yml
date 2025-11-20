@@ -50,4 +50,4 @@ jobs:
             exit 1
           fi
       - name: Compile
-        run: arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipstack=ipv4 --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" arduino/RNDIS_USB
+        run: arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" arduino/RNDIS_USB
