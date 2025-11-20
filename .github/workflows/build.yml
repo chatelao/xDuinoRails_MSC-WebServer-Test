@@ -31,6 +31,23 @@ jobs:
         run: |
           arduino-cli core update-index --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
           arduino-cli core install rp2040:rp2040 --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
-          arduino-cli lib install "Adafruit TinyUSB Library"
+          # arduino-cli lib install "Adafruit TinyUSB Library" # Removed to avoid conflict with core bundled lib
+      - name: Fix TinyUSB Headers
+        run: |
+          # Copy missing headers to the core library to allow compilation of RNDIS support
+          # Find the library path (assuming standard installation)
+          LIB_PATH=$(find /home/runner/.arduino15/packages/rp2040/hardware/rp2040 -name "Adafruit_TinyUSB_Arduino" | head -n 1)
+          if [ -d "$LIB_PATH" ]; then
+            echo "Found library at $LIB_PATH"
+            # Copy to src/class/net/ (or wherever ecm_rndis_device.c is)
+            # We look for ecm_rndis_device.c to be sure
+            DEST_DIR=$(find "$LIB_PATH" -name ecm_rndis_device.c -exec dirname {} \;)
+            echo "Destination dir: $DEST_DIR"
+            cp arduino/RNDIS_USB/rndis_protocol.h "$DEST_DIR/"
+            cp arduino/RNDIS_USB/ndis.h "$DEST_DIR/"
+          else
+            echo "Library not found!"
+            exit 1
+          fi
       - name: Compile
-        run: arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb arduino/RNDIS_USB
+        run: arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" arduino/RNDIS_USB
