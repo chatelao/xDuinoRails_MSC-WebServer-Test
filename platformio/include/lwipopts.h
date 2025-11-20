@@ -1,7 +1,0 @@
-#ifndef _LWIPOPTS_H
-#define _LWIPOPTS_H
-
-#define LWIP_HTTPD_CUSTOM_FILES 1
-#define LWIP_HTTPD_DYNAMIC_HEADERS 1
-
-#endif
