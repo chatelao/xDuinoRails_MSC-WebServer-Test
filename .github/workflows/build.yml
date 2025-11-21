@@ -1,6 +1,13 @@
 name: Build Firmware
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
 
 jobs:
   build_platformio:
@@ -19,6 +26,14 @@ jobs:
       - name: Build
         run: pio run
         working-directory: platformio
+      - name: Rename Artifact
+        if: github.event_name == 'release'
+        run: mv platformio/.pio/build/seeed-xiao-rp2040/firmware.uf2 firmware-platformio.uf2
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: firmware-platformio.uf2
 
   build_arduino:
     runs-on: ubuntu-latest
@@ -50,4 +65,14 @@ jobs:
             exit 1
           fi
       - name: Compile
-        run: arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" arduino/RNDIS_USB
+        run: |
+          mkdir -p build_output
+          arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" --output-dir build_output arduino/RNDIS_USB
+      - name: Rename Artifact
+        if: github.event_name == 'release'
+        run: mv build_output/RNDIS_USB.ino.uf2 firmware-arduino.uf2
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: firmware-arduino.uf2
