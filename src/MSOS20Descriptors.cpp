@@ -6,6 +6,29 @@
 // Vendor Code for MS OS 2.0 Descriptor
 #define VENDOR_REQUEST_MICROSOFT 0xEE
 
+// Helper macros for byte conversion if not already defined
+#ifndef U16_TO_U8S_LE
+#define U16_TO_U8S_LE(x)  ((uint8_t)((x) & 0xFF)), ((uint8_t)((x) >> 8))
+#endif
+
+#ifndef U32_TO_U8S_LE
+#define U32_TO_U8S_LE(x)  ((uint8_t)((x) & 0xFF)), ((uint8_t)(((x) >> 8) & 0xFF)), ((uint8_t)(((x) >> 16) & 0xFF)), ((uint8_t)(((x) >> 24) & 0xFF))
+#endif
+
+// Microsoft OS 2.0 Descriptor Constants
+#ifndef MS_OS_20_SET_HEADER_DESCRIPTOR
+#define MS_OS_20_SET_HEADER_DESCRIPTOR       0x00
+#endif
+#ifndef MS_OS_20_SUBSET_HEADER_CONFIGURATION
+#define MS_OS_20_SUBSET_HEADER_CONFIGURATION 0x01
+#endif
+#ifndef MS_OS_20_SUBSET_HEADER_FUNCTION
+#define MS_OS_20_SUBSET_HEADER_FUNCTION      0x02
+#endif
+#ifndef MS_OS_20_FEATURE_COMPATBLE_ID
+#define MS_OS_20_FEATURE_COMPATBLE_ID        0x03
+#endif
+
 // Total length of MS OS 2.0 Descriptor Set
 // Header(10) + ConfigSubset(8) + FunctionSubset(8) + CompatibleID(20) = 46 bytes
 #define MS_OS_20_DESC_LEN  0x2E
