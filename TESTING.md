@@ -1,30 +1,69 @@
-# Manual Host-Side RNDIS Verification
+# Host-Side Verification
 
-This document outlines the steps to manually verify that the Seeed Studio XIAO RP2040 is correctly recognized as an RNDIS network device by a host computer.
+This document outlines the steps to verify the functions of the Seeed Studio XIAO RP2040 composite device:
+1.  **RNDIS Network Interface**
+2.  **USB Mass Storage (MSC)**
+3.  **Webserver**
 
-**Prerequisites:**
+## Prerequisites
 
-*   The firmware from this project has been compiled and flashed to the Seeed Studio XIAO RP2040.
-*   The device is connected to the host computer via a USB cable.
+*   The firmware has been flashed to the device.
+*   The device is connected to the host computer via USB.
 
-**Verification Steps:**
+## 1. Verify USB Mass Storage
 
-1.  **Connect the Device:**
-    *   Connect the XIAO RP2040 to your host computer.
+When you plug in the device, a small (64KB) USB drive should appear on your system.
 
-2.  **Check for Device Recognition:**
-    *   **Windows:**
-        1.  Open the **Device Manager**.
-        2.  Look for a new device under the "Network adapters" section. It should appear as "USB Ethernet/RNDIS Gadget" or a similar name.
-        3.  If the device appears under "Other devices" with a yellow exclamation mark, you may need to manually install the RNDIS drivers.
-    *   **macOS:**
-        1.  Open **System Preferences** > **Network**.
-        2.  A new network interface, such as "RNDIS/Ethernet Gadget," should appear in the list.
-    *   **Linux:**
-        1.  Open a terminal.
-        2.  Run the command `ip a` or `ifconfig`.
-        3.  Look for a new network interface (e.g., `usb0`).
+*   **Windows:** Check File Explorer for a new drive (e.g., `USB Drive (D:)`).
+*   **macOS/Linux:** The drive should mount automatically.
 
-3.  **Expected Outcome:**
-    *   If the device is correctly recognized, a new network interface will be visible in your host computer's network settings. This confirms that the TinyUSB RNDIS stack is functioning as expected.
-    *   You may not be able to send or receive data without further network configuration (e.g., setting up a DHCP server on the device), but the appearance of the network interface is sufficient to confirm that the RNDIS functionality is initialized correctly.
+**Verification:**
+*   Open the drive.
+*   You should see a file named `README.TXT`.
+*   Open `README.TXT`. It should contain text instructing you to connect to `http://192.168.7.1`.
+
+*Note: If the drive asks to be formatted, you can try formatting it, but the current firmware initializes it with a FAT12 filesystem in RAM every time it boots. Any data written will be lost on reboot.*
+
+## 2. Verify RNDIS Network Interface
+
+*   **Windows:** Device Manager > Network adapters > "USB Ethernet/RNDIS Gadget" (or similar).
+*   **macOS:** System Preferences > Network > "RNDIS/Ethernet Gadget".
+*   **Linux:** `ip a` should show a new interface (e.g., `usb0`).
+
+## 3. Verify Webserver
+
+To access the webserver, your computer must be on the same network subnet as the device. The device IP is **192.168.7.1**.
+
+### Step A: Configure Host Network
+You must manually assign an IP address to the RNDIS network interface on your computer.
+
+*   **IP Address:** `192.168.7.2` (or any address from .2 to .254)
+*   **Subnet Mask:** `255.255.255.0`
+*   **Gateway:** (Leave blank or set to 192.168.7.1)
+
+**Windows Example:**
+1.  Control Panel > Network and Internet > Network Connections.
+2.  Right-click the RNDIS adapter > Properties.
+3.  Select "Internet Protocol Version 4 (TCP/IPv4)" > Properties.
+4.  Select "Use the following IP address".
+5.  Enter IP: `192.168.7.2`, Mask: `255.255.255.0`.
+6.  Click OK.
+
+**Linux Example:**
+```bash
+sudo ip link set dev usb0 up
+sudo ip addr add 192.168.7.2/24 dev usb0
+```
+
+### Step B: Access the Webserver
+
+**Option 1: Browser**
+1.  Open a web browser.
+2.  Navigate to `http://192.168.7.1`.
+3.  You should see a page saying "Hello from RP2040 RNDIS!".
+
+**Option 2: Automated Script**
+A Python script `test_webserver.py` is provided in the root of the repository.
+1.  Ensure you have Python installed.
+2.  Install requests: `pip install requests`
+3.  Run the script: `python test_webserver.py`

@@ -35,10 +35,56 @@ int32_t msc_write_cb(uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
 
 void msc_flush_cb() { }
 
+void format_msc_disk() {
+  memset(msc_disk, 0, sizeof(msc_disk));
+
+  // --- Boot Sector (Sector 0) ---
+  uint8_t *bs = msc_disk[0];
+  bs[0] = 0xEB; bs[1] = 0x3C; bs[2] = 0x90; // Jump to code
+  memcpy(bs + 3, "MSDOS5.0", 8);            // OEM Name
+  bs[11] = 0x00; bs[12] = 0x02;             // Bytes per sector: 512
+  bs[13] = 0x01;                            // Sectors per cluster: 1
+  bs[14] = 0x01; bs[15] = 0x00;             // Reserved sectors: 1
+  bs[16] = 0x02;                            // Number of FATs: 2
+  bs[17] = 0x10; bs[18] = 0x00;             // Root entries: 16
+  bs[19] = 0x80; bs[20] = 0x00;             // Total sectors: 128
+  bs[21] = 0xF8;                            // Media descriptor
+  bs[22] = 0x01; bs[23] = 0x00;             // Sectors per FAT: 1
+  bs[510] = 0x55; bs[511] = 0xAA;           // Signature
+
+  // --- FAT1 (Sector 1) & FAT2 (Sector 2) ---
+  // FAT12 entries: 0xF8, 0xFF, 0xFF (for entries 0 and 1)
+  // Entry 2 (EOF) for README.TXT: 0xFF, 0x0F
+  // Byte sequence: F8 FF FF FF 0F 00 ...
+  uint8_t fat_data[] = { 0xF8, 0xFF, 0xFF, 0xFF, 0x0F, 0x00 };
+  memcpy(msc_disk[1], fat_data, sizeof(fat_data));
+  memcpy(msc_disk[2], fat_data, sizeof(fat_data));
+
+  // --- Root Directory (Sector 3) ---
+  uint8_t *rd = msc_disk[3];
+  // Entry 0: README.TXT
+  memcpy(rd, "README  TXT", 11);
+  rd[11] = 0x20; // Attribute: Archive
+  // Time/Date fields can be 0 or generic
+  rd[26] = 0x02; rd[27] = 0x00; // Starting cluster: 2
+
+  const char *readme_content = "RP2040 RNDIS Webserver\r\n\r\nConnect to http://192.168.7.1";
+  uint32_t file_size = strlen(readme_content);
+  rd[28] = file_size & 0xFF;
+  rd[29] = (file_size >> 8) & 0xFF;
+  rd[30] = (file_size >> 16) & 0xFF;
+  rd[31] = (file_size >> 24) & 0xFF;
+
+  // --- Data (Sector 4 / Cluster 2) ---
+  memcpy(msc_disk[4], readme_content, file_size);
+}
+
 void msc_setup() {
+  format_msc_disk(); // Initialize RAM disk with FAT12
   usb_msc.setID("Seeed", "XIAO RP2040", "1.0");
   usb_msc.setReadWriteCallback(msc_read_cb, msc_write_cb, msc_flush_cb);
   usb_msc.setCapacity(MSC_RAM_BLOCK_COUNT, MSC_RAM_BLOCK_SIZE);
+  usb_msc.setUnitReady(true); // Make sure it's ready
   usb_msc.begin();
 }
 
