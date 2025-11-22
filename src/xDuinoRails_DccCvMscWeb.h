@@ -1,0 +1,6 @@
+#ifndef XDUINORAILS_DCCCVMSCWEB_H
+#define XDUINORAILS_DCCCVMSCWEB_H
+
+#include "RndisInterface.h"
+
+#endif // XDUINORAILS_DCCCVMSCWEB_H

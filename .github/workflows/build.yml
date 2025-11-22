@@ -46,7 +46,10 @@ jobs:
         run: |
           arduino-cli core update-index --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
           arduino-cli core install rp2040:rp2040 --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
-          # arduino-cli lib install "Adafruit TinyUSB Library" # Removed to avoid conflict with core bundled lib
+      - name: Install Library
+        run: |
+          mkdir -p $HOME/Arduino/libraries
+          ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/xDuinoRails_DccCvMscWeb
       - name: Fix TinyUSB Headers
         run: |
           # Copy missing headers to the core library to allow compilation of RNDIS support
@@ -58,8 +61,8 @@ jobs:
             # We look for ecm_rndis_device.c to be sure
             DEST_DIR=$(find "$LIB_PATH" -name ecm_rndis_device.c -exec dirname {} \;)
             echo "Destination dir: $DEST_DIR"
-            cp arduino/RNDIS_USB/rndis_protocol.h "$DEST_DIR/"
-            cp arduino/RNDIS_USB/ndis.h "$DEST_DIR/"
+            cp src/rndis_protocol.h "$DEST_DIR/"
+            cp src/ndis.h "$DEST_DIR/"
           else
             echo "Library not found!"
             exit 1
@@ -67,10 +70,10 @@ jobs:
       - name: Compile
         run: |
           mkdir -p build_output
-          arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" --output-dir build_output arduino/RNDIS_USB
+          arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" --output-dir build_output examples/RndisMscWeb
       - name: Rename Artifact
         if: github.event_name == 'release'
-        run: mv build_output/RNDIS_USB.ino.uf2 firmware-arduino.uf2
+        run: mv build_output/RndisMscWeb.ino.uf2 firmware-arduino.uf2
       - name: Upload Release Asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
