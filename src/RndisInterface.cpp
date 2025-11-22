@@ -136,14 +136,17 @@ uint8_t transmit_buffer[1520];
 extern "C" err_t linkoutput_fn(struct netif *netif, struct pbuf *p) {
   (void)netif;
 
+  if (!tud_ready()) {
+    return ERR_OK;
+  }
+
   if (p->tot_len > sizeof(transmit_buffer)) {
     Serial.printf("RNDIS: XMIT Too large: %d\n", p->tot_len);
     return ERR_VAL;
   }
 
-  pbuf_copy_partial(p, transmit_buffer, p->tot_len, 0);
-
   if (tud_network_can_xmit(p->tot_len)) {
+      pbuf_copy_partial(p, transmit_buffer, p->tot_len, 0);
       tud_network_xmit(transmit_buffer, p->tot_len);
       Serial.printf("RNDIS: XMIT %d bytes\n", p->tot_len);
       return ERR_OK;
