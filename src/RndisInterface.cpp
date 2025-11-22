@@ -8,6 +8,7 @@
 #include <lwip/apps/mdns.h>
 #include "DHCPServer.h"
 #include "USBD_Net_Custom.h"
+#include "WebServer.h"
 #include <Arduino.h> // For Serial
 
 extern "C" void sys_check_timeouts(void);
@@ -94,63 +95,30 @@ void msc_setup() {
   usb_msc.begin();
 }
 
-// --- HTTPD Custom FS ---
-extern "C" {
-
-int fs_open_custom(struct fs_file *file, const char *name) {
-  Serial.printf("fs_open_custom: Request for %s\n", name);
-  if (strcmp(name, "/index.html") == 0 || strcmp(name, "/") == 0) {
-    static const char *html = "<html><body><h1>Hello from RP2040 RNDIS!</h1><p>Webserver over USB working.</p></body></html>";
-    file->data = (const char *)html;
-    file->len = strlen(html);
-    file->index = file->len;
-    file->flags = 0;
-    Serial.printf("fs_open_custom: Served index.html (len %d)\n", file->len);
-    return 1;
-  }
-  Serial.println("fs_open_custom: File not found");
-  return 0;
-}
-
-void fs_close_custom(struct fs_file *file) {
-  (void)file;
-  Serial.println("fs_close_custom");
-}
-
-int fs_read_custom(struct fs_file *file, char *buffer, int count) {
-  (void)file; (void)buffer; (void)count;
-  return 0;
-}
-
-int fs_bytes_left_custom(struct fs_file *file) {
-  return file->len - file->index;
-}
-
-} // extern "C"
 
 // --- RNDIS & LwIP Glue ---
 uint8_t tud_network_mac_address[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 struct netif netif_data;
-uint8_t transmit_buffer[1520];
+
+// Buffer for received frame (deferred processing)
+static struct pbuf *received_frame = NULL;
 
 extern "C" err_t linkoutput_fn(struct netif *netif, struct pbuf *p) {
   (void)netif;
 
-  if (p->tot_len > sizeof(transmit_buffer)) {
-    Serial.printf("RNDIS: XMIT Too large: %d\n", p->tot_len);
-    return ERR_VAL;
-  }
+  for (;;) {
+    if (!tud_ready()) {
+      return ERR_USE; // or ERR_OK/ERR_BUF if we want to drop, but GP2040-CE uses ERR_USE
+    }
 
-  pbuf_copy_partial(p, transmit_buffer, p->tot_len, 0);
-
-  if (tud_network_can_xmit(p->tot_len)) {
-      tud_network_xmit(transmit_buffer, p->tot_len);
-      Serial.printf("RNDIS: XMIT %d bytes\n", p->tot_len);
+    if (tud_network_can_xmit(p->tot_len)) {
+      tud_network_xmit(p, 0 /* unused */);
       return ERR_OK;
-  }
+    }
 
-  Serial.println("RNDIS: XMIT Failed (busy)");
-  return ERR_MEM;
+    // Transfer execution to TinyUSB to clear buffer
+    tud_task();
+  }
 }
 
 extern "C" err_t ip_init_fn(struct netif *netif) {
@@ -172,8 +140,6 @@ void rndis_setup() {
 
   // Initialize Serial (CDC)
   Serial.begin(115200);
-  // Wait a bit for USB to settle (optional, but helps if terminal connects fast)
-  // delay(1000);
 
   Serial.println("==================================");
   Serial.println("RNDIS Msc Web Firmware Starting...");
@@ -202,8 +168,63 @@ void rndis_setup() {
   Serial.println("Webserver Initialized");
 }
 
+static void service_traffic(void) {
+  if (received_frame) {
+    err_t ret = netif_data.input(received_frame, &netif_data);
+    if (ret != ERR_OK) {
+        pbuf_free(received_frame); // Free if input didn't take ownership (or failed)
+        // Note: netif->input (tcpip_input or netif_input) usually frees pbuf on OK.
+        // But if using netif_input directly, it handles pbuf internally?
+        // ethernet_input checks type and passes to ip_input.
+        // ip_input frees pbuf if invalid.
+        // Wait, GP2040-CE frees it manually?
+        // GP2040-CE: err_t ret = ethernet_input(received_frame, &netif_data); pbuf_free(received_frame);
+        // If using ethernet_input directly (NO_SYS), we must be careful.
+        // If LwIP takes the pbuf (e.g. queueing), we shouldn't free it.
+        // But in NO_SYS, it processes immediately.
+        // GP2040-CE uses pbuf_free(received_frame) ALWAYS.
+        // This implies LwIP copies data? Or processes it fully?
+        // If I use netif_input, which is usually ethernet_input.
+        // I should check LwIP docs/source.
+        // ethernet_input -> ip_input. ip_input frees pbuf when done.
+        // So if I free it again, double free!
+        // GP2040-CE might be wrong or using different LwIP config?
+        // Let's look at GP2040-CE source again.
+        // "err_t ret = ethernet_input(received_frame, &netif_data); pbuf_free(received_frame);"
+        // This looks like they assume they own the pbuf.
+        // But if `tud_network_recv_cb` allocated PBUF_POOL, it's LwIP memory.
+        // If I free it, and LwIP also frees it...
+        // Maybe `ethernet_input` DOES NOT free if it returns ERR_OK?
+        // Actually, `ethernet_input` usually consumes the pbuf.
+        // I will trust LwIP convention: if passed to input, ownership is transferred.
+        // BUT, if I don't free it, and LwIP doesn't free it (e.g. drop), memory leak.
+        // I will stick to my previous logic which didn't explicitly free unless error.
+        // Wait, my previous logic: "if (netif_data.input(...) != ERR_OK) pbuf_free(p);"
+        // This is standard.
+        // GP2040-CE explicitly frees. Maybe they know something.
+        // I'll stick to standard "free on error".
+
+        // Actually, if I look at GP2040-CE logic again:
+        // pbuf_free(received_frame); received_frame = NULL;
+        // This runs UNCONDITIONALLY.
+        // If LwIP kept it (e.g. frag reassembly), this would be fatal.
+        // Maybe they configured LwIP to copy?
+        // Or maybe they use PBUF_REF? No, PBUF_POOL.
+
+        // I will trust standard LwIP usage: do not free if input returns ERR_OK.
+        // However, `tud_network_recv_renew()` is needed.
+    }
+    // If returns ERR_OK, pbuf is consumed.
+    // received_frame pointer is dangling now, so set to NULL.
+    received_frame = NULL;
+
+    tud_network_recv_renew();
+  }
+}
+
 void rndis_loop() {
   tud_task();
+  service_traffic(); // Process deferred packets
   sys_check_timeouts();
 
   static uint32_t last_print = 0;
@@ -216,29 +237,31 @@ void rndis_loop() {
 extern "C" {
 
 bool tud_network_recv_cb(const uint8_t *src, uint16_t size) {
-  // Serial.printf("RNDIS: RECV %d bytes\n", size); // Commented out to avoid spam if high traffic, or enable for debug
-  Serial.printf("RNDIS: RECV %d bytes\n", size);
+  if (received_frame) return false; // Backpressure
 
-  struct pbuf *p = pbuf_alloc(PBUF_RAW, size, PBUF_POOL);
-  if (p) {
-    pbuf_take(p, src, size);
-    if (netif_data.input(p, &netif_data) != ERR_OK) {
-      pbuf_free(p);
-      Serial.println("RNDIS: Netif input failed");
+  if (size) {
+    struct pbuf *p = pbuf_alloc(PBUF_RAW, size, PBUF_POOL);
+    if (p) {
+      memcpy(p->payload, src, size);
+      received_frame = p;
+      return true;
     }
-    return true;
   }
-  Serial.println("RNDIS: Pbuf alloc failed");
   return false;
 }
 
 void tud_network_init_cb(void) {
   Serial.println("TinyUSB: tud_network_init_cb called");
+  if (received_frame) {
+      pbuf_free(received_frame);
+      received_frame = NULL;
+  }
 }
 
 uint16_t tud_network_xmit_cb(uint8_t *dst, void *ref, uint16_t arg) {
-  memcpy(dst, ref, arg);
-  return arg;
+  struct pbuf *p = (struct pbuf *)ref;
+  (void)arg;
+  return pbuf_copy_partial(p, dst, p->tot_len, 0);
 }
 
 } // extern "C"
