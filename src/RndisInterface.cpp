@@ -5,6 +5,7 @@
 #include <lwip/etharp.h>
 #include <lwip/apps/httpd.h>
 #include <lwip/apps/fs.h>
+#include <lwip/apps/mdns.h>
 
 extern "C" void sys_check_timeouts(void);
 
@@ -147,7 +148,7 @@ extern "C" err_t ip_init_fn(struct netif *netif) {
   netif->linkoutput = linkoutput_fn;
   netif->output = etharp_output;
   netif->mtu = 1500;
-  netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_LINK_UP | NETIF_FLAG_UP;
+  netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_LINK_UP | NETIF_FLAG_UP | NETIF_FLAG_IGMP;
   memcpy(netif->hwaddr, tud_network_mac_address, 6);
   netif->hwaddr_len = 6;
   netif->name[0] = 'r';
@@ -167,6 +168,10 @@ void rndis_setup() {
 
   netif_add(&netif_data, &ipaddr, &netmask, &gw, NULL, ip_init_fn, netif_input);
   netif_set_default(&netif_data);
+
+  mdns_resp_init();
+  mdns_resp_add_netif(&netif_data, "xdrtrain");
+  mdns_resp_add_service(&netif_data, "xdrtrain", "_http", DNSSD_PROTO_TCP, 80, NULL, NULL);
 
   httpd_init(); // Initialize Webserver
 
