@@ -237,11 +237,8 @@ void tud_network_init_cb(void) {
 }
 
 uint16_t tud_network_xmit_cb(uint8_t *dst, void *ref, uint16_t arg) {
-  (void)dst;
-  (void)ref;
-  (void)arg;
-  Serial.println("TinyUSB: tud_network_xmit_cb called (should not happen?)");
-  return 0;
+  memcpy(dst, ref, arg);
+  return arg;
 }
 
 } // extern "C"
