@@ -70,7 +70,7 @@ jobs:
       - name: Compile
         run: |
           mkdir -p build_output
-          arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1" --output-dir build_output examples/RndisMscWeb
+          arduino-cli compile --fqbn rp2040:rp2040:seeed_xiao_rp2040:usbstack=tinyusb,ipbtstack=ipv4only --build-property "build.extra_flags=-DCFG_TUD_ECM_RNDIS=1 -DCFG_TUD_NET_RNDIS=1 -DCFG_TUD_MSC=1 -DLWIP_HTTPD=1 -DLWIP_HTTPD_CUSTOM_FILES=1 -DLWIP_HTTPD_DYNAMIC_HEADERS=1 -DCFG_TUD_VENDOR=0" --output-dir build_output examples/RndisMscWeb
       - name: Rename Artifact
         if: github.event_name == 'release'
         run: mv build_output/RndisMscWeb.ino.uf2 firmware-arduino.uf2

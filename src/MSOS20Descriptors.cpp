@@ -1,6 +1,8 @@
 #include "tusb.h"
 #include "USBD_Net_Custom.h"
 
+#if !defined(CFG_TUD_VENDOR) || (CFG_TUD_VENDOR == 0)
+
 // Vendor Code for MS OS 2.0 Descriptor
 #define VENDOR_REQUEST_MICROSOFT 0xEE
 
@@ -72,3 +74,5 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
 }
 
 } // extern "C"
+
+#endif
