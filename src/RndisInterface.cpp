@@ -8,6 +8,7 @@
 #include <lwip/apps/mdns.h>
 #include "DHCPServer.h"
 #include "USBD_Net_Custom.h"
+#include "WebServer.h"
 #include <Arduino.h> // For Serial
 
 extern "C" void sys_check_timeouts(void);
@@ -94,39 +95,6 @@ void msc_setup() {
   usb_msc.begin();
 }
 
-// --- HTTPD Custom FS ---
-extern "C" {
-
-int fs_open_custom(struct fs_file *file, const char *name) {
-  Serial.printf("fs_open_custom: Request for %s\n", name);
-  if (strcmp(name, "/index.html") == 0 || strcmp(name, "/") == 0) {
-    static const char *html = "<html><body><h1>Hello from RP2040 RNDIS!</h1><p>Webserver over USB working.</p></body></html>";
-    file->data = (const char *)html;
-    file->len = strlen(html);
-    file->index = file->len;
-    file->flags = 0;
-    Serial.printf("fs_open_custom: Served index.html (len %d)\n", file->len);
-    return 1;
-  }
-  Serial.println("fs_open_custom: File not found");
-  return 0;
-}
-
-void fs_close_custom(struct fs_file *file) {
-  (void)file;
-  Serial.println("fs_close_custom");
-}
-
-int fs_read_custom(struct fs_file *file, char *buffer, int count) {
-  (void)file; (void)buffer; (void)count;
-  return 0;
-}
-
-int fs_bytes_left_custom(struct fs_file *file) {
-  return file->len - file->index;
-}
-
-} // extern "C"
 
 // --- RNDIS & LwIP Glue ---
 uint8_t tud_network_mac_address[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
@@ -148,12 +116,10 @@ extern "C" err_t linkoutput_fn(struct netif *netif, struct pbuf *p) {
   if (tud_network_can_xmit(p->tot_len)) {
       pbuf_copy_partial(p, transmit_buffer, p->tot_len, 0);
       tud_network_xmit(transmit_buffer, p->tot_len);
-      Serial.printf("RNDIS: XMIT %d bytes\n", p->tot_len);
       return ERR_OK;
   }
 
-  Serial.println("RNDIS: XMIT Failed (busy)");
-  return ERR_MEM;
+  return ERR_OK; // Drop packet if busy to prevent LwIP retry loops
 }
 
 extern "C" err_t ip_init_fn(struct netif *netif) {
