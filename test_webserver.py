@@ -10,7 +10,6 @@ def test_webserver():
             print("Success: Connected to webserver.")
             if "Hello from RP2040 RNDIS!" in response.text:
                 print("Success: Content verified.")
-                return True
             else:
                 print("Failure: Content mismatch.")
                 print("Received:", response.text)
@@ -18,6 +17,28 @@ def test_webserver():
         else:
             print(f"Failure: Status code {response.status_code}")
             return False
+
+        # Test API
+        api_url = f"{url}/api/status"
+        print(f"Testing API: {api_url}")
+        response = requests.get(api_url, timeout=5)
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                print("Success: API returned JSON:", data)
+                if "uptime" in data and "heap_free" in data:
+                    print("Success: API Content verified.")
+                    return True
+                else:
+                    print("Failure: API JSON missing keys.")
+                    return False
+            except ValueError:
+                print("Failure: API did not return valid JSON.")
+                return False
+        else:
+            print(f"Failure: API Status code {response.status_code}")
+            return False
+
     except requests.exceptions.ConnectionError:
         print("Failure: Could not connect. Check your network settings and ensure the device is plugged in.")
         print("Ensure your computer's RNDIS interface is configured with IP 192.168.7.x (e.g., 192.168.7.2).")
