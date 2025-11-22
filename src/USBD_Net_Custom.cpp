@@ -8,6 +8,10 @@ USBD_Net_Custom::USBD_Net_Custom() {
   _ep_out = 0;
 }
 
+uint8_t USBD_Net_Custom::getInterfaceNumber() const {
+  return _itf_num;
+}
+
 bool USBD_Net_Custom::begin() {
   // RNDIS uses 2 interfaces: Control (Abstract Control Model) + Data
   _itf_num = USBDevice.allocInterface(2);
