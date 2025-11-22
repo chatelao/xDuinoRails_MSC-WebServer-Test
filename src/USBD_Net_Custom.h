@@ -7,6 +7,7 @@ class USBD_Net_Custom : public Adafruit_USBD_Interface {
 public:
   USBD_Net_Custom();
   bool begin();
+  uint8_t getInterfaceNumber() const;
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf, uint16_t bufsize);
 
 private:
@@ -16,5 +17,7 @@ private:
   uint8_t _ep_in;
   uint8_t _ep_out;
 };
+
+extern USBD_Net_Custom usb_net;
 
 #endif
