@@ -3,6 +3,7 @@
 #include <lwip/ip_addr.h>
 #include <lwip/netif.h>
 #include <string.h>
+#include <Arduino.h> // For Serial
 
 // DHCP Constants
 #define DHCP_SERVER_PORT 67
@@ -77,7 +78,10 @@ static void dhcp_recv_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, c
   (void)arg;
   (void)pcb;
 
+  Serial.printf("DHCP: Received packet len=%d from port %d\n", p->len, port);
+
   if (p->len < sizeof(dhcp_packet_t) - 308) {
+    Serial.println("DHCP: Packet too short");
     pbuf_free(p);
     return;
   }
@@ -86,6 +90,7 @@ static void dhcp_recv_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, c
 
   // Verify Magic Cookie
   if (ntohl(req->magic_cookie) != DHCP_MAGIC_COOKIE) {
+    Serial.println("DHCP: Invalid Magic Cookie");
     pbuf_free(p);
     return;
   }
@@ -111,7 +116,10 @@ static void dhcp_recv_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, c
     opt_ptr += len;
   }
 
+  Serial.printf("DHCP: Msg Type %d\n", msg_type);
+
   if (msg_type != DHCP_DISCOVER && msg_type != DHCP_REQUEST) {
+    Serial.println("DHCP: Ignoring message type");
     pbuf_free(p);
     return;
   }
@@ -119,6 +127,7 @@ static void dhcp_recv_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, c
   // Prepare Reply
   struct pbuf *reply_pbuf = pbuf_alloc(PBUF_TRANSPORT, sizeof(dhcp_packet_t), PBUF_RAM);
   if (!reply_pbuf) {
+    Serial.println("DHCP: Failed to alloc reply pbuf");
     pbuf_free(p);
     return;
   }
@@ -149,6 +158,8 @@ static void dhcp_recv_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, c
   uint8_t reply_type = (msg_type == DHCP_DISCOVER) ? DHCP_OFFER : DHCP_ACK;
   reply_opts = add_option_byte(reply_opts, DHCP_OPTION_MSG_TYPE, reply_type);
 
+  Serial.printf("DHCP: Sending Reply Type %d (Assigning 192.168.7.2)\n", reply_type);
+
   // Server Identifier
   uint32_t server_ip_n;
   IP4_ADDR((ip4_addr_t *)&server_ip_n, 192, 168, 7, 1);
@@ -173,7 +184,12 @@ static void dhcp_recv_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, c
   ip_addr_t broadcast_addr;
   IP_ADDR4(&broadcast_addr, 255, 255, 255, 255);
 
-  udp_sendto(dhcp_pcb, reply_pbuf, &broadcast_addr, DHCP_CLIENT_PORT);
+  err_t err = udp_sendto(dhcp_pcb, reply_pbuf, &broadcast_addr, DHCP_CLIENT_PORT);
+  if (err != ERR_OK) {
+    Serial.printf("DHCP: udp_sendto failed: %d\n", err);
+  } else {
+    Serial.println("DHCP: Reply sent");
+  }
 
   pbuf_free(reply_pbuf);
   pbuf_free(p);
@@ -184,5 +200,8 @@ void dhcp_server_init(void) {
   if (dhcp_pcb) {
     udp_bind(dhcp_pcb, IP_ADDR_ANY, DHCP_SERVER_PORT);
     udp_recv(dhcp_pcb, dhcp_recv_callback, NULL);
+    Serial.println("DHCP Server Initialized on port 67");
+  } else {
+    Serial.println("DHCP Server Init Failed: No PCB");
   }
 }
