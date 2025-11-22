@@ -8,6 +8,7 @@
 #include <lwip/apps/mdns.h>
 #include "DHCPServer.h"
 #include "USBD_Net_Custom.h"
+#include <Arduino.h> // For Serial
 
 extern "C" void sys_check_timeouts(void);
 
@@ -94,29 +95,30 @@ void msc_setup() {
 }
 
 // --- HTTPD Custom FS ---
-// Note: We assume LWIP_HTTPD_CUSTOM_FILES is enabled via build flags.
-// If not, these won't be called and linker will fail on fs_open in httpd.c
-// We wrap them in extern "C" because httpd.c is C.
-
 extern "C" {
 
 int fs_open_custom(struct fs_file *file, const char *name) {
+  Serial.printf("fs_open_custom: Request for %s\n", name);
   if (strcmp(name, "/index.html") == 0 || strcmp(name, "/") == 0) {
     static const char *html = "<html><body><h1>Hello from RP2040 RNDIS!</h1><p>Webserver over USB working.</p></body></html>";
     file->data = (const char *)html;
     file->len = strlen(html);
     file->index = file->len;
     file->flags = 0;
+    Serial.printf("fs_open_custom: Served index.html (len %d)\n", file->len);
     return 1;
   }
+  Serial.println("fs_open_custom: File not found");
   return 0;
 }
 
 void fs_close_custom(struct fs_file *file) {
   (void)file;
+  Serial.println("fs_close_custom");
 }
 
 int fs_read_custom(struct fs_file *file, char *buffer, int count) {
+  (void)file; (void)buffer; (void)count;
   return 0;
 }
 
@@ -135,6 +137,7 @@ extern "C" err_t linkoutput_fn(struct netif *netif, struct pbuf *p) {
   (void)netif;
 
   if (p->tot_len > sizeof(transmit_buffer)) {
+    Serial.printf("RNDIS: XMIT Too large: %d\n", p->tot_len);
     return ERR_VAL;
   }
 
@@ -142,13 +145,16 @@ extern "C" err_t linkoutput_fn(struct netif *netif, struct pbuf *p) {
 
   if (tud_network_can_xmit(p->tot_len)) {
       tud_network_xmit(transmit_buffer, p->tot_len);
+      Serial.printf("RNDIS: XMIT %d bytes\n", p->tot_len);
       return ERR_OK;
   }
 
+  Serial.println("RNDIS: XMIT Failed (busy)");
   return ERR_MEM;
 }
 
 extern "C" err_t ip_init_fn(struct netif *netif) {
+  Serial.println("LwIP: ip_init_fn called");
   netif->linkoutput = linkoutput_fn;
   netif->output = etharp_output;
   netif->mtu = 1500;
@@ -164,7 +170,16 @@ void rndis_setup() {
   usb_net.begin();
   msc_setup(); // Initialize MSC
 
+  // Initialize Serial (CDC)
+  Serial.begin(115200);
+  // Wait a bit for USB to settle (optional, but helps if terminal connects fast)
+  // delay(1000);
+
+  Serial.println("==================================");
+  Serial.println("RNDIS Msc Web Firmware Starting...");
+
   lwip_init();
+  Serial.println("LwIP Initialized");
 
   ip4_addr_t ipaddr, netmask, gw;
   IP4_ADDR(&ipaddr, 192, 168, 7, 1);
@@ -175,43 +190,57 @@ void rndis_setup() {
   netif_set_default(&netif_data);
   netif_set_up(&netif_data);
   netif_set_link_up(&netif_data);
+  Serial.println("Netif added and set up (IP: 192.168.7.1)");
 
   mdns_resp_init();
   mdns_resp_add_netif(&netif_data, "xdrtrain");
   mdns_resp_add_service(&netif_data, "xdrtrain", "_http", DNSSD_PROTO_TCP, 80, NULL, NULL);
+  Serial.println("mDNS Initialized (xdrtrain.local)");
 
   dhcp_server_init(); // Initialize DHCP Server
   httpd_init(); // Initialize Webserver
-
-  Serial.begin(115200);
+  Serial.println("Webserver Initialized");
 }
 
 void rndis_loop() {
   tud_task();
   sys_check_timeouts();
+
+  static uint32_t last_print = 0;
+  if (millis() - last_print > 5000) {
+    last_print = millis();
+    Serial.println("RNDIS Loop Alive");
+  }
 }
 
 extern "C" {
 
 bool tud_network_recv_cb(const uint8_t *src, uint16_t size) {
+  // Serial.printf("RNDIS: RECV %d bytes\n", size); // Commented out to avoid spam if high traffic, or enable for debug
+  Serial.printf("RNDIS: RECV %d bytes\n", size);
+
   struct pbuf *p = pbuf_alloc(PBUF_RAW, size, PBUF_POOL);
   if (p) {
     pbuf_take(p, src, size);
     if (netif_data.input(p, &netif_data) != ERR_OK) {
       pbuf_free(p);
+      Serial.println("RNDIS: Netif input failed");
     }
     return true;
   }
+  Serial.println("RNDIS: Pbuf alloc failed");
   return false;
 }
 
 void tud_network_init_cb(void) {
+  Serial.println("TinyUSB: tud_network_init_cb called");
 }
 
 uint16_t tud_network_xmit_cb(uint8_t *dst, void *ref, uint16_t arg) {
   (void)dst;
   (void)ref;
   (void)arg;
+  Serial.println("TinyUSB: tud_network_xmit_cb called (should not happen?)");
   return 0;
 }
 
