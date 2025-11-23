@@ -75,7 +75,7 @@ void format_msc_disk() {
   // Time/Date fields can be 0 or generic
   rd[26] = 0x02; rd[27] = 0x00; // Starting cluster: 2
 
-  const char *readme_content = "RP2040 RNDIS Webserver\r\n\r\nConnect to http://192.168.7.1";
+  const char *readme_content = "RP2040 CDC-NCM Webserver\r\n\r\nConnect to http://192.168.7.1";
   uint32_t file_size = strlen(readme_content);
   rd[28] = file_size & 0xFF;
   rd[29] = (file_size >> 8) & 0xFF;
@@ -96,7 +96,7 @@ void msc_setup() {
 }
 
 
-// --- RNDIS & LwIP Glue ---
+// --- CDC-NCM & LwIP Glue ---
 uint8_t tud_network_mac_address[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 struct netif netif_data;
 static struct pbuf *received_frame = NULL;
@@ -129,8 +129,8 @@ extern "C" err_t ip_init_fn(struct netif *netif) {
   netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_IGMP;
   memcpy(netif->hwaddr, tud_network_mac_address, 6);
   netif->hwaddr_len = 6;
-  netif->name[0] = 'r';
-  netif->name[1] = 'n';
+  netif->name[0] = 'n';
+  netif->name[1] = 'c';
   return ERR_OK;
 }
 
@@ -144,7 +144,7 @@ void rndis_setup() {
   // delay(1000);
 
   Serial.println("==================================");
-  Serial.println("RNDIS Msc Web Firmware Starting...");
+  Serial.println("CDC-NCM Msc Web Firmware Starting...");
 
   lwip_init();
   Serial.println("LwIP Initialized");
@@ -187,7 +187,7 @@ void rndis_loop() {
   static uint32_t last_print = 0;
   if (millis() - last_print > 5000) {
     last_print = millis();
-    Serial.println("RNDIS Loop Alive");
+    Serial.println("CDC-NCM Loop Alive");
   }
 }
 
