@@ -13,6 +13,7 @@ public:
 private:
   uint8_t _itf_num;
   uint8_t _str_idx;
+  uint8_t _mac_str_idx;
   uint8_t _ep_notif;
   uint8_t _ep_in;
   uint8_t _ep_out;
