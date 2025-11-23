@@ -99,27 +99,26 @@ void msc_setup() {
 // --- RNDIS & LwIP Glue ---
 uint8_t tud_network_mac_address[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 struct netif netif_data;
-uint8_t transmit_buffer[1520];
+static struct pbuf *received_frame = NULL;
 
 extern "C" err_t linkoutput_fn(struct netif *netif, struct pbuf *p) {
   (void)netif;
 
-  if (!tud_ready()) {
-    return ERR_OK;
-  }
+  for (;;) {
+    // If TinyUSB isn't ready, we cannot do anything
+    if (!tud_ready()) {
+        return ERR_USE;
+    }
 
-  if (p->tot_len > sizeof(transmit_buffer)) {
-    Serial.printf("RNDIS: XMIT Too large: %d\n", p->tot_len);
-    return ERR_VAL;
-  }
+    // If the network driver can accept another packet, we make it happen
+    if (tud_network_can_xmit(p->tot_len)) {
+        tud_network_xmit(p, 0 /* unused */);
+        return ERR_OK;
+    }
 
-  if (tud_network_can_xmit(p->tot_len)) {
-      pbuf_copy_partial(p, transmit_buffer, p->tot_len, 0);
-      tud_network_xmit(transmit_buffer, p->tot_len);
-      return ERR_OK;
+    // Transfer execution to TinyUSB in the hopes that it will finish transmitting the prior packet
+    tud_task();
   }
-
-  return ERR_OK; // Drop packet if busy to prevent LwIP retry loops
 }
 
 extern "C" err_t ip_init_fn(struct netif *netif) {
@@ -173,6 +172,16 @@ void rndis_setup() {
 
 void rndis_loop() {
   tud_task();
+
+  // Handle deferred receive processing
+  if (received_frame) {
+    if (netif_data.input(received_frame, &netif_data) != ERR_OK) {
+        pbuf_free(received_frame);
+    }
+    received_frame = NULL;
+    tud_network_recv_renew();
+  }
+
   sys_check_timeouts();
 
   static uint32_t last_print = 0;
@@ -185,29 +194,33 @@ void rndis_loop() {
 extern "C" {
 
 bool tud_network_recv_cb(const uint8_t *src, uint16_t size) {
-  // Serial.printf("RNDIS: RECV %d bytes\n", size); // Commented out to avoid spam if high traffic, or enable for debug
-  Serial.printf("RNDIS: RECV %d bytes\n", size);
-
-  struct pbuf *p = pbuf_alloc(PBUF_RAW, size, PBUF_POOL);
-  if (p) {
-    pbuf_take(p, src, size);
-    if (netif_data.input(p, &netif_data) != ERR_OK) {
-      pbuf_free(p);
-      Serial.println("RNDIS: Netif input failed");
-    }
-    return true;
+  // If we have a pending frame that hasn't been processed yet, we can't take another one
+  if (received_frame) {
+      return false;
   }
-  Serial.println("RNDIS: Pbuf alloc failed");
+
+  if (size) {
+      struct pbuf *p = pbuf_alloc(PBUF_RAW, size, PBUF_POOL);
+      if (p) {
+          pbuf_take(p, src, size);
+          received_frame = p;
+          return true;
+      }
+  }
   return false;
 }
 
 void tud_network_init_cb(void) {
   Serial.println("TinyUSB: tud_network_init_cb called");
+  if (received_frame) {
+      pbuf_free(received_frame);
+      received_frame = NULL;
+  }
 }
 
 uint16_t tud_network_xmit_cb(uint8_t *dst, void *ref, uint16_t arg) {
-  memcpy(dst, ref, arg);
-  return arg;
+  struct pbuf *p = (struct pbuf *)ref;
+  return pbuf_copy_partial(p, dst, p->tot_len, 0);
 }
 
 } // extern "C"
