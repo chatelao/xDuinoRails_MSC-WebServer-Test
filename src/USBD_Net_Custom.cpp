@@ -30,6 +30,18 @@ uint16_t USBD_Net_Custom::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf, u
   // TUD_RNDIS_DESCRIPTOR(_itfnum, _stridx, _ep_notif, _ep_notif_size, _epout, _epin, _epsize)
   uint8_t desc[] = { TUD_RNDIS_DESCRIPTOR(_itf_num, _str_idx, _ep_notif, 8, _ep_out, _ep_in, 64) };
 
+  // Patch to use Class 0xEF (Misc), Subclass 0x04 (RNDIS), Protocol 0x01
+  // This avoids "Invalid Interface Class" warnings and improves Windows compatibility
+  // IAD (Offsets 4, 5, 6)
+  desc[4] = 0xEF; // TUSB_CLASS_MISC
+  desc[5] = 0x04; // MISC_SUBCLASS_RNDIS
+  desc[6] = 0x01; // MISC_PROTOCOL_RNDIS
+
+  // Interface Descriptor (Offsets 13, 14, 15)
+  desc[13] = 0xEF; // TUSB_CLASS_MISC
+  desc[14] = 0x04; // MISC_SUBCLASS_RNDIS
+  desc[15] = 0x01; // MISC_PROTOCOL_RNDIS
+
   uint16_t len = sizeof(desc);
 
   if (buf) {
